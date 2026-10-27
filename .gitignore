@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+Thumbs.db
+
+# Kullanıcı sırları — ASLA commit'lenmez
+.hexfear/
+config.local.json
+*.key
+api-keys.json
+.env
+.env.*
