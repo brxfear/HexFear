@@ -3,8 +3,12 @@
   "version": "0.3.1",
   "description": "HexFear — AI destekli, yerel çalışan tersine mühendislik analiz aracı (CTF / crackme / yetkili açık denetimi için).",
   "main": "main.js",
+  "bin": {
+    "hexfear-mcp": "src/mcp/server.js"
+  },
   "scripts": {
     "start": "electron .",
+    "mcp": "node src/mcp/server.js",
     "dev": "electron . --dev",
     "dist": "electron-builder --win",
     "pack": "electron-builder --win --dir"

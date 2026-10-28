@@ -40,6 +40,26 @@ Geliştirme (DevTools açık):
 npm run dev
 ```
 
+## MCP sunucusu (API anahtarsız kullanım)
+
+HexFear'ın analiz araçları bir MCP sunucusu olarak da sunulur. Böylece Claude Code, Claude Desktop, Gemini CLI, Cursor gibi istemciler dosyayı **kendi aboneliğinle** inceleyebilir; uygulamaya API anahtarı girmen gerekmez. Sunucu yerel ve salt-okunurdur; Electron gerektirmez, yalnızca Node yeterli.
+
+Araçlar: `open_file`, `get_overview`, `list_strings`, `read_bytes`, `read_at_rva`, `search_bytes`, `get_sections`, `get_imports`, `get_exports`, `get_capabilities`, `get_indicators`, `disassemble`. Analiz modları (`flag`, `crackme_key`, `vuln_audit`, `general`) MCP prompt'u olarak gelir.
+
+Bu klasörde açılan Claude Code oturumları sunucuyu `.mcp.json` sayesinde otomatik bulur. Her yerden kullanmak için:
+
+```bash
+claude mcp add --scope user hexfear -- node "C:/yol/HexFear/src/mcp/server.js"
+```
+
+Claude Desktop / Cursor / Gemini CLI için yapılandırmaya aynı komutu ekle:
+
+```json
+{ "mcpServers": { "hexfear": { "command": "node", "args": ["C:/yol/HexFear/src/mcp/server.js"] } } }
+```
+
+Bir dosyayı baştan açık başlatmak için yolu argüman olarak ver (`node src/mcp/server.js hedef.exe`) ya da `HEXFEAR_FILE` ortam değişkenini kullan.
+
 ## Gizlilik
 
 Dosyalar **bu makinede** analiz edilir, hiçbir sunucuya gönderilmez. AI katmanı eklendiğinde, modele yalnızca senin onayladığın veri parçaları (string'ler, başlıklar, seçtiğin bölgeler) senin API anahtarınla gönderilir. API anahtarları cihazda şifreli saklanır ve asla depoya yazılmaz.
