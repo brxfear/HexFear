@@ -1,7 +1,10 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, clipboard } = require('electron');
 const path = require('path');
+const os = require('os');
+const { execFileSync } = require('child_process');
+const mcpInstall = require('./src/mcp/install');
 const { analyzeFile } = require('./src/analysis');
 const keystore = require('./src/ai/keystore');
 const { runAgent } = require('./src/ai/agent');
@@ -87,6 +90,69 @@ ipcMain.handle('hf:agent:cancel', async (_e, runId) => {
   const ac = runs.get(runId);
   if (ac) ac.abort();
   return { ok: true };
+});
+
+// --- MCP istemci kurulumu --------------------------------------------------
+// Portable exe her açılışta geçici klasöre açılır; electron-builder bunu
+// PORTABLE_EXECUTABLE_DIR ile bildirir.
+function hasNode() {
+  try {
+    execFileSync('node', ['-v'], { stdio: 'ignore', timeout: 4000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function mcpEntry() {
+  return mcpInstall.resolveServerEntry({
+    execPath: process.execPath,
+    appPath: app.getAppPath(),
+    isPortable: !!process.env.PORTABLE_EXECUTABLE_DIR,
+    runtimeDir: path.join(app.getPath('userData'), 'mcp-runtime'),
+    nodeAvailable: !!process.env.PORTABLE_EXECUTABLE_DIR && hasNode()
+  });
+}
+
+function mcpClients() {
+  return mcpInstall.getClients({ home: os.homedir() });
+}
+
+ipcMain.handle('hf:mcp:status', async () => {
+  const entry = mcpEntry();
+  return {
+    entryError: entry.error || null,
+    snippet: mcpInstall.manualSnippet(entry),
+    clients: mcpClients().map((c) => mcpInstall.clientStatus(c, entry))
+  };
+});
+
+ipcMain.handle('hf:mcp:install', async (_e, id) => {
+  const client = mcpClients().find((c) => c.id === id);
+  if (!client) return { ok: false, error: 'Bilinmeyen istemci: ' + id };
+  try {
+    const entry = mcpEntry();
+    if (entry.needsRuntimeCopy) mcpInstall.copyRuntime(app.getAppPath(), path.join(app.getPath('userData'), 'mcp-runtime'));
+    return mcpInstall.install(client, entry);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle('hf:mcp:remove', async (_e, id) => {
+  const client = mcpClients().find((c) => c.id === id);
+  if (!client) return { ok: false, error: 'Bilinmeyen istemci: ' + id };
+  try {
+    return mcpInstall.uninstall(client);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle('hf:mcp:copy', async () => {
+  const snippet = mcpInstall.manualSnippet(mcpEntry());
+  if (snippet) clipboard.writeText(snippet);
+  return { ok: !!snippet };
 });
 
 app.whenReady().then(() => {

@@ -16,6 +16,7 @@ const path = require('path');
 const { analyzeFile } = require('../analysis');
 const { getToolDefs, runTool, detectDisassembler } = require('../ai/tools');
 const { MODES, buildSystemPrompt } = require('../ai/prompts');
+const { stripGeminiUnsupported } = require('../ai/providers');
 const pkg = require('../../package.json');
 
 console.log = console.info = console.warn = console.error;
@@ -50,11 +51,13 @@ const OPEN_FILE_TOOL = {
   }
 };
 
+// Şemalar Gemini uyumlu alt kümeye indirilir: Antigravity / Gemini CLI gibi
+// Gemini tabanlı istemciler additionalProperties içeren aracı reddedebilir.
 function listTools() {
   return [OPEN_FILE_TOOL, ...getToolDefs()].map((t) => ({
     name: t.name,
     description: t.description,
-    inputSchema: t.schema,
+    inputSchema: stripGeminiUnsupported(t.schema),
     annotations: { readOnlyHint: true, openWorldHint: false }
   }));
 }

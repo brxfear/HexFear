@@ -117,6 +117,7 @@ test('tools/list: open_file + 11 analiz aracı, hepsi salt-okunur', async () => 
   for (const t of res.result.tools) {
     assert.equal(t.inputSchema.type, 'object', t.name);
     assert.equal(t.annotations.readOnlyHint, true, t.name);
+    assert.doesNotMatch(JSON.stringify(t.inputSchema), /additionalProperties|\$schema/, t.name + ' Gemini uyumlu olmalı');
   }
 });
 

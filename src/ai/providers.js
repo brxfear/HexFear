@@ -231,4 +231,4 @@ const DEFAULT_MODELS = {
   gemini: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview']
 };
 
-module.exports = { chat, DEFAULT_MODELS };
+module.exports = { chat, DEFAULT_MODELS, stripGeminiUnsupported };

@@ -97,6 +97,17 @@ function wireUI() {
   $('settingsModal').addEventListener('mousedown', (e) => { downBg = (e.target === $('settingsModal')); });
   $('settingsModal').addEventListener('click', (e) => { if (e.target === $('settingsModal') && downBg) hideSettings(); downBg = false; });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('settingsModal').classList.contains('hidden')) hideSettings(); });
+  $('mcpBtn').addEventListener('click', openMcp);
+  $('closeMcp').addEventListener('click', hideMcp);
+  let mcpDownBg = false;
+  $('mcpModal').addEventListener('mousedown', (e) => { mcpDownBg = (e.target === $('mcpModal')); });
+  $('mcpModal').addEventListener('click', (e) => { if (e.target === $('mcpModal') && mcpDownBg) hideMcp(); mcpDownBg = false; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('mcpModal').classList.contains('hidden')) hideMcp(); });
+  $('mcpCopyBtn').addEventListener('click', async () => {
+    const res = await window.hexfear.mcp.copySnippet();
+    $('mcpCopyBtn').textContent = res && res.ok ? '✓ Kopyalandı' : 'Kopyalanamadı';
+    setTimeout(() => { $('mcpCopyBtn').textContent = '⧉ JSON’u kopyala'; }, 1600);
+  });
   $('runBtn').addEventListener('click', runAgent);
   $('cancelBtn').addEventListener('click', () => { if (activeRunId) window.hexfear.agent.cancel(activeRunId); });
 
@@ -461,6 +472,68 @@ function openSettings() {
     row.appendChild(enter); grid.appendChild(row);
   }
   $('settingsModal').classList.remove('hidden');
+}
+
+// ============================================================ MCP modalı
+function hideMcp() { $('mcpModal').classList.add('hidden'); }
+
+const MCP_STATES = {
+  installed: ['● kurulu', 'ok'],
+  different: ['◐ farklı ayar var', 'diff'],
+  none: ['○ kurulu değil', 'missing'],
+  error: ['✕ ayar dosyası okunamadı', 'err']
+};
+
+async function openMcp() {
+  $('mcpModal').classList.remove('hidden');
+  await renderMcp();
+}
+
+async function renderMcp(note) {
+  const st = await window.hexfear.mcp.status();
+  const errEl = $('mcpEntryError');
+  errEl.textContent = st.entryError || '';
+  errEl.classList.toggle('hidden', !st.entryError);
+  $('mcpCopyBtn').disabled = !st.snippet;
+
+  const grid = $('mcpGrid'); grid.textContent = '';
+  for (const c of st.clients) {
+    const row = el('div', 'key-row' + (c.detected || c.state !== 'none' ? '' : ' undetected'));
+    const top = el('div', 'top');
+    top.appendChild(el('span', 'name', c.name));
+    const [label, cls] = c.detected || c.state !== 'none' ? MCP_STATES[c.state] : ['— bu bilgisayarda bulunamadı', 'missing'];
+    top.appendChild(el('span', 'state ' + cls, label));
+    row.appendChild(top);
+    row.appendChild(el('span', 'path', c.file));
+    if (c.error) row.appendChild(el('span', 'state err small', c.error));
+    if (note && note.id === c.id) row.appendChild(el('span', 'small ' + (note.ok ? 'muted' : 'warn'), note.text));
+
+    const actions = el('div', 'enter');
+    if (c.detected || c.state !== 'none') {
+      const inst = el('button', 'btn primary small', c.state === 'installed' ? 'Yeniden kur' : c.state === 'different' ? 'Güncelle' : 'Kur');
+      inst.disabled = !!st.entryError || c.state === 'error';
+      inst.addEventListener('click', async () => {
+        inst.disabled = true;
+        const res = await window.hexfear.mcp.install(c.id);
+        await renderMcp(res && res.ok
+          ? { id: c.id, ok: true, text: '✓ Eklendi. ' + c.restartHint }
+          : { id: c.id, ok: false, text: 'Kurulamadı: ' + (res && res.error) });
+      });
+      actions.appendChild(inst);
+    }
+    if (c.state === 'installed' || c.state === 'different') {
+      const rm = el('button', 'btn ghost small', 'Kaldır');
+      rm.addEventListener('click', async () => {
+        const res = await window.hexfear.mcp.remove(c.id);
+        await renderMcp(res && res.ok
+          ? { id: c.id, ok: true, text: 'Kaldırıldı.' }
+          : { id: c.id, ok: false, text: 'Kaldırılamadı: ' + (res && res.error) });
+      });
+      actions.appendChild(rm);
+    }
+    if (actions.childNodes.length) row.appendChild(actions);
+    grid.appendChild(row);
+  }
 }
 
 // ============================================================ AI ajan

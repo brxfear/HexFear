@@ -1,6 +1,6 @@
 {
   "name": "hexfear",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "HexFear — AI destekli, yerel çalışan tersine mühendislik analiz aracı (CTF / crackme / yetkili açık denetimi için).",
   "main": "main.js",
   "bin": {

@@ -18,6 +18,7 @@
       </div>
       <div class="top-actions">
         <span class="disasm-pill" id="disasmPill">disassembler: —</span>
+        <button id="mcpBtn" class="btn ghost">⚡ MCP</button>
         <button id="settingsBtn" class="btn ghost">⚙ Ayarlar</button>
       </div>
     </header>
@@ -74,7 +75,7 @@
     <footer class="statusbar">
       <span id="status">hazır</span>
       <span class="spacer"></span>
-      <span class="muted">v0.4.0 — derin statik analiz + AI ajan + MCP</span>
+      <span class="muted">v0.5.0 — derin statik analiz + AI ajan + MCP</span>
     </footer>
 
     <!-- Ayarlar modalı -->
@@ -87,6 +88,24 @@
         <p class="muted small" id="encNote"></p>
         <div class="key-grid" id="keyGrid"></div>
         <p class="muted small">Anahtarlar cihazda OS düzeyinde şifrelenir (safeStorage), depoya asla yazılmaz. Modele yalnızca senin seçtiğin veri parçaları, senin anahtarınla gönderilir.</p>
+      </div>
+    </div>
+
+    <!-- MCP modalı -->
+    <div id="mcpModal" class="modal hidden">
+      <div class="modal-box">
+        <div class="modal-head">
+          <h3>MCP Entegrasyonu</h3>
+          <button id="closeMcp" class="btn ghost">✕</button>
+        </div>
+        <p class="muted small">HexFear’ın analiz araçlarını Claude Code, Cursor, Antigravity gibi uygulamalara ekler. Böylece kendi aboneliğinle çalışan ajanın dosyayı inceleyebilir — API anahtarı gerekmez. Araçlar yerel ve salt-okunurdur.</p>
+        <p class="warn small hidden" id="mcpEntryError"></p>
+        <div class="key-grid" id="mcpGrid"></div>
+        <div class="mcp-manual">
+          <span class="muted small">Listede olmayan bir uygulama için yapılandırmayı elle ekle:</span>
+          <button id="mcpCopyBtn" class="btn ghost small">⧉ JSON’u kopyala</button>
+        </div>
+        <p class="muted small">Kurduktan sonra uygulamayı yeniden başlat ve ajana dosyanın <strong>tam yolunu</strong> ver: “C:\ctf\chall.exe dosyasını hexfear ile aç, flag’i bul”. Mevcut ayarların yedeği <code>.bak-hexfear</code> uzantısıyla saklanır.</p>
       </div>
     </div>
 

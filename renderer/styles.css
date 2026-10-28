@@ -268,7 +268,7 @@ details summary { cursor: pointer; color: var(--accent-2); padding: 5px 0; user-
 /* ---- Modal ---- */
 .hidden { display: none !important; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(3px); animation: fade .18s; }
-.modal-box { background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 14px; padding: 18px 20px; width: 580px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.modal-box { background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 14px; padding: 18px 20px; width: 580px; max-width: 92vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .modal-head h3 { margin: 0; color: var(--accent); }
 .small { font-size: 12px; }
@@ -280,6 +280,12 @@ details summary { cursor: pointer; color: var(--accent-2); padding: 5px 0; user-
 .key-row .state.ok { color: var(--accent); }
 .key-row .state.missing { color: var(--muted); }
 .key-row .enter { display: flex; gap: 8px; }
+.key-row .state.diff { color: var(--warn); }
+.key-row .state.err { color: var(--danger); }
+.key-row .path { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-all; }
+.key-row.undetected { opacity: .55; }
+.mcp-manual { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.warn { color: var(--warn); }
 .key-row input { flex: 1; font: inherit; background: var(--bg-3); color: var(--fg); border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 10px; font-family: var(--mono); }
 
 /* ---- Statusbar ---- */

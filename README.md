@@ -49,34 +49,32 @@ npm run dist
 
 ## MCP sunucusu (API anahtarsız kullanım)
 
-HexFear'ın analiz araçları bir MCP sunucusu olarak da sunulur. Böylece Claude Code, Claude Desktop, Gemini CLI, Cursor gibi istemciler dosyayı **kendi aboneliğinle** inceleyebilir; uygulamaya API anahtarı girmen gerekmez. Sunucu yerel ve salt-okunurdur; Electron gerektirmez, yalnızca Node yeterli.
+HexFear'ın analiz araçları bir MCP sunucusu olarak da sunulur. Böylece Claude Code, Claude Desktop, Gemini CLI, Cursor gibi istemciler dosyayı **kendi aboneliğinle** inceleyebilir; uygulamaya API anahtarı girmen gerekmez. Sunucu yerel ve salt-okunurdur.
 
 Araçlar: `open_file`, `get_overview`, `list_strings`, `read_bytes`, `read_at_rva`, `search_bytes`, `get_sections`, `get_imports`, `get_exports`, `get_capabilities`, `get_indicators`, `disassemble`. Analiz modları (`flag`, `crackme_key`, `vuln_audit`, `general`) MCP prompt'u olarak gelir.
 
-Bu klasörde açılan Claude Code oturumları sunucuyu `.mcp.json` sayesinde otomatik bulur. Her yerden kullanmak için:
+### Tek tıkla kurulum (önerilen)
+
+HexFear'ı aç → üst çubukta **⚡ MCP** → kullandığın uygulamanın yanında **Kur**. Desteklenenler: Claude Code, Claude Desktop (Microsoft Store sürümü dahil), Cursor, Antigravity, Gemini CLI, Windsurf. Bilgisayarda bulunamayan uygulamalar soluk görünür.
+
+- Ayar dosyasında yalnızca `mcpServers.hexfear` eklenir/güncellenir; diğer her şey korunur. İlk yazımdan önce dosyanın yedeği `.bak-hexfear` uzantısıyla alınır. Bozuk bir ayar dosyasına dokunulmaz.
+- Kurulum (Setup) sürümünde HexFear.exe'nin kendisi sunucu olarak kaydedilir (`ELECTRON_RUN_AS_NODE=1`) — **Node.js gerekmez**.
+- Portable exe her açılışta geçici klasöre açıldığı için sunucu dosyaları `%APPDATA%\hexfear\mcp-runtime` altına kopyalanır ve sistemdeki Node.js kullanılır; Node yoksa Setup sürümü önerilir.
+- HexFear'ı güncelledikten ya da taşıdıktan sonra durum **◐ farklı ayar var** görünürse **Güncelle**'ye bas.
+- Kurulumdan sonra ilgili uygulamayı yeniden başlat. Listede olmayan bir istemci için **JSON'u kopyala** ile yapılandırmayı al.
+
+### Elle kurulum
+
+Bu klasörde açılan Claude Code oturumları sunucuyu `.mcp.json` sayesinde otomatik bulur. Kaynak koddan, her yerden kullanmak için:
 
 ```bash
 claude mcp add --scope user hexfear -- node "C:/yol/HexFear/src/mcp/server.js"
 ```
 
-Claude Desktop / Cursor / Gemini CLI için yapılandırmaya aynı komutu ekle:
+Diğer istemcilerde yapılandırma (`mcpServers`) aynıdır:
 
 ```json
 { "mcpServers": { "hexfear": { "command": "node", "args": ["C:/yol/HexFear/src/mcp/server.js"] } } }
-```
-
-**Node kurulu değilse** kurulu HexFear'ın kendisi sunucu olarak çalışır (`ELECTRON_RUN_AS_NODE=1`). Kurulum varsayılan olarak `%LOCALAPPDATA%\Programs\HexFear` altına gider (portable exe her açılışta geçici klasöre açıldığı için bunun için uygun değil):
-
-```json
-{
-  "mcpServers": {
-    "hexfear": {
-      "command": "C:/Users/<kullanıcı>/AppData/Local/Programs/HexFear/HexFear.exe",
-      "args": ["C:/Users/<kullanıcı>/AppData/Local/Programs/HexFear/resources/app.asar/src/mcp/server.js"],
-      "env": { "ELECTRON_RUN_AS_NODE": "1" }
-    }
-  }
-}
 ```
 
 Bir dosyayı baştan açık başlatmak için yolu argüman olarak ver (`node src/mcp/server.js hedef.exe`) ya da `HEXFEAR_FILE` ortam değişkenini kullan.

@@ -22,6 +22,13 @@ contextBridge.exposeInMainWorld('hexfear', {
     remove: (provider) => ipcRenderer.invoke('hf:keys:remove', provider)
   },
 
+  mcp: {
+    status: () => ipcRenderer.invoke('hf:mcp:status'),
+    install: (id) => ipcRenderer.invoke('hf:mcp:install', id),
+    remove: (id) => ipcRenderer.invoke('hf:mcp:remove', id),
+    copySnippet: () => ipcRenderer.invoke('hf:mcp:copy')
+  },
+
   agent: {
     run: (opts) => ipcRenderer.invoke('hf:agent:run', opts),
     cancel: (runId) => ipcRenderer.invoke('hf:agent:cancel', runId),
