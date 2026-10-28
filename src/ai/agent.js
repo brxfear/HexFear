@@ -21,8 +21,16 @@ function sleep(ms, signal) {
   });
 }
 
-// Geçici sunucu hatalarında (429/5xx) üstel beklemeyle yeniden dener.
-// 429 için az (kota kalıcı olabilir), 5xx için daha fazla deneme.
+// Hata mesajındaki "retry in 29.9s" gibi bekleme süresini (sn) çıkarır.
+function retryAfterSeconds(e) {
+  const m = String((e && e.message) || '').match(/retry in ([\d.]+)\s*s/i);
+  return m ? parseFloat(m[1]) : null;
+}
+
+const MAX_RATE_WAIT_S = 70; // dakikalık kota için beklenir; daha uzunu (günlük kota) beklenmez
+
+// Geçici sunucu hatalarında (429/5xx) yeniden dener. 429'da sağlayıcı bir bekleme
+// süresi verdiyse (dakikalık istek kotası) o kadar bekleyip devam eder.
 async function chatWithRetry(args, emit) {
   let attempt = 0;
   for (;;) {
@@ -30,11 +38,21 @@ async function chatWithRetry(args, emit) {
       return await chat(args);
     } catch (e) {
       const retryable = e && e.retryable;
-      const max = retryable ? (e.status === 429 ? 1 : 3) : 0;
+      const after = e && e.status === 429 ? retryAfterSeconds(e) : null;
+      const rateWait = after != null && after <= MAX_RATE_WAIT_S;
+      let max = 0;
+      if (retryable) {
+        if (e.status !== 429) max = 3;
+        else if (rateWait) max = 4;
+        else if (after == null) max = 1;
+      }
       if (!retryable || attempt >= max || (args.signal && args.signal.aborted)) throw e;
       attempt++;
-      const wait = Math.min(2000 * 2 ** (attempt - 1), 12000); // 2s, 4s, 8s…
-      emit && emit({ type: 'status', text: `Geçici hata (${e.status}) — ${wait / 1000}sn sonra yeniden deneniyor (${attempt})…` });
+      const wait = rateWait ? Math.ceil(after + 1) * 1000 : Math.min(2000 * 2 ** (attempt - 1), 12000);
+      const text = rateWait
+        ? `İstek kotası doldu (429) — ${wait / 1000} sn bekleniyor, sonra kaldığı yerden devam (${attempt})…`
+        : `Geçici hata (${e.status}) — ${wait / 1000}sn sonra yeniden deneniyor (${attempt})…`;
+      emit && emit({ type: 'status', text });
       await sleep(wait, args.signal);
       if (args.signal && args.signal.aborted) throw e;
     }

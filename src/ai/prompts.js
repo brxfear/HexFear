@@ -46,6 +46,12 @@ Not: Bu yalnızca bir challenge/crackme içindir — ticari yazılım lisansı k
 Her bulgu için: açığın TÜRÜ (ör. buffer overflow, komut enjeksiyonu, zayıf kripto, sabit kodlanmış sır, güvensiz deserialization), YERİ (fonksiyon/offset/section), neden açık olduğunun kısa açıklaması ve ÖNEM derecesi (düşük/orta/yüksek/kritik).
 Çalışan exploit ÜRETME; yalnızca nerede ve neden olduğunu tarif et. Sabit kodlanmış bir sır bulursan değerini YAZMA, yalnızca konumunu ve türünü belirt.
 İyileştirme önerisi (remediation) ekleyebilirsin.`
+  },
+  general: {
+    label: 'Genel analiz (ne yapıyor?)',
+    goal: `GÖREV: Bu programın NE YAPTIĞINI anlat. Ana akışı, girdi/çıktıları ve önemli fonksiyonların mantığını tersine mühendislikle çıkar.
+Bir hesaplama/algoritma varsa adım adım açıkla (hangi hash, hangi döngü, hangi matematik). Kullandığı kütüphane ve API'leri ne amaçla çağırdığını söyle.
+Emin olmadığın kısımları açıkça "tahmin" diye işaretle.`
   }
 };
 
