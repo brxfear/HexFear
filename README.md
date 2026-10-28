@@ -40,6 +40,13 @@ Geliştirme (DevTools açık):
 npm run dev
 ```
 
+Testler ve Windows kurulum/portable exe:
+
+```bash
+npm test
+npm run dist
+```
+
 ## MCP sunucusu (API anahtarsız kullanım)
 
 HexFear'ın analiz araçları bir MCP sunucusu olarak da sunulur. Böylece Claude Code, Claude Desktop, Gemini CLI, Cursor gibi istemciler dosyayı **kendi aboneliğinle** inceleyebilir; uygulamaya API anahtarı girmen gerekmez. Sunucu yerel ve salt-okunurdur; Electron gerektirmez, yalnızca Node yeterli.
@@ -56,6 +63,20 @@ Claude Desktop / Cursor / Gemini CLI için yapılandırmaya aynı komutu ekle:
 
 ```json
 { "mcpServers": { "hexfear": { "command": "node", "args": ["C:/yol/HexFear/src/mcp/server.js"] } } }
+```
+
+**Node kurulu değilse** kurulu HexFear'ın kendisi sunucu olarak çalışır (`ELECTRON_RUN_AS_NODE=1`). Kurulum varsayılan olarak `%LOCALAPPDATA%\Programs\HexFear` altına gider (portable exe her açılışta geçici klasöre açıldığı için bunun için uygun değil):
+
+```json
+{
+  "mcpServers": {
+    "hexfear": {
+      "command": "C:/Users/<kullanıcı>/AppData/Local/Programs/HexFear/HexFear.exe",
+      "args": ["C:/Users/<kullanıcı>/AppData/Local/Programs/HexFear/resources/app.asar/src/mcp/server.js"],
+      "env": { "ELECTRON_RUN_AS_NODE": "1" }
+    }
+  }
+}
 ```
 
 Bir dosyayı baştan açık başlatmak için yolu argüman olarak ver (`node src/mcp/server.js hedef.exe`) ya da `HEXFEAR_FILE` ortam değişkenini kullan.
