@@ -7,6 +7,9 @@ const { chunkedEntropy } = require('./entropy');
 const { extractStrings } = require('./strings');
 const { parsePE } = require('./pe');
 const { parseELF } = require('./elf');
+const { matchCapabilities } = require('./capabilities');
+const { detectCrypto } = require('./crypto');
+const { extractIndicators } = require('./indicators');
 
 const MAX_READ = 192 * 1024 * 1024; // 192 MB üstü okunmaz
 const MAX_STRINGS_SCAN = 48 * 1024 * 1024; // string taraması için üst sınır
@@ -53,6 +56,11 @@ async function analyzeFile(filePath) {
   const scanBuf = buf.length > MAX_STRINGS_SCAN ? buf.subarray(0, MAX_STRINGS_SCAN) : buf;
   report.strings = extractStrings(scanBuf, { minLen: 4, limit: 4000 });
   if (buf.length > MAX_STRINGS_SCAN) report.strings.scanNote = 'İlk 48 MB tarandı';
+
+  // Yetenek/davranış, kripto ve gösterge tespiti (string'ler + yapı üzerinden)
+  try { report.capabilities = matchCapabilities(report); } catch { report.capabilities = []; }
+  try { report.crypto = detectCrypto(buf); } catch { report.crypto = { algorithms: [], signatures: [] }; }
+  try { report.indicators = extractIndicators(report); } catch { report.indicators = { total: 0, counts: {} }; }
 
   return report;
 }

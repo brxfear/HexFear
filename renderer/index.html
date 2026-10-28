@@ -7,11 +7,12 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div class="scanline"></div>
     <header class="topbar">
       <div class="brand">
         <span class="logo">⌁</span>
         <div>
-          <h1>HexFear</h1>
+          <h1>Hex<span class="accent">Fear</span></h1>
           <p class="tag">yerel · AI destekli tersine mühendislik analizi</p>
         </div>
       </div>
@@ -22,6 +23,7 @@
     </header>
 
     <main>
+      <!-- Dosya yokken -->
       <section id="dropZone" class="drop">
         <div class="drop-inner">
           <div class="drop-icon">⇩</div>
@@ -31,7 +33,9 @@
         </div>
       </section>
 
-      <!-- AI kontrol çubuğu (dosya yüklenince görünür) -->
+      <!-- Dosya yüklendikten sonra -->
+      <section id="fileBar" class="file-bar hidden"></section>
+
       <section id="aiBar" class="ai-bar hidden">
         <div class="ai-row">
           <label>Sağlayıcı
@@ -63,15 +67,14 @@
         </div>
       </section>
 
-      <section id="agentFeed" class="agent-feed hidden"></section>
-      <section id="finalReport" class="results hidden"></section>
-      <section id="results" class="results hidden"></section>
+      <nav id="tabBar" class="tab-bar hidden"></nav>
+      <section id="tabContent" class="tab-content hidden"></section>
     </main>
 
     <footer class="statusbar">
       <span id="status">hazır</span>
       <span class="spacer"></span>
-      <span class="muted">v0.2.0 — statik analiz + AI ajan</span>
+      <span class="muted">v0.3.0 — derin statik analiz + AI ajan</span>
     </footer>
 
     <!-- Ayarlar modalı -->

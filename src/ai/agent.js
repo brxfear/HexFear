@@ -14,6 +14,33 @@ const { buildSystemPrompt } = require('./prompts');
 
 const MAX_STEPS = 18;
 
+function sleep(ms, signal) {
+  return new Promise((resolve) => {
+    const t = setTimeout(resolve, ms);
+    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+  });
+}
+
+// Geçici sunucu hatalarında (429/5xx) üstel beklemeyle yeniden dener.
+// 429 için az (kota kalıcı olabilir), 5xx için daha fazla deneme.
+async function chatWithRetry(args, emit) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await chat(args);
+    } catch (e) {
+      const retryable = e && e.retryable;
+      const max = retryable ? (e.status === 429 ? 1 : 3) : 0;
+      if (!retryable || attempt >= max || (args.signal && args.signal.aborted)) throw e;
+      attempt++;
+      const wait = Math.min(2000 * 2 ** (attempt - 1), 12000); // 2s, 4s, 8s…
+      emit && emit({ type: 'status', text: `Geçici hata (${e.status}) — ${wait / 1000}sn sonra yeniden deneniyor (${attempt})…` });
+      await sleep(wait, args.signal);
+      if (args.signal && args.signal.aborted) throw e;
+    }
+  }
+}
+
 function compactReport(r) {
   // Modele başlangıçta verilecek özet. Tüm string'ler değil; sadece ilgi
   // çekici olanlar gönderilir — gerisini model list_strings ile isteyebilir.
@@ -38,6 +65,9 @@ function compactReport(r) {
           importedDlls: s.imports ? s.imports.map((i) => `${i.dll}(${i.functionCount})`) : undefined,
           neededLibraries: s.neededLibraries
         },
+    capabilities: (r.capabilities || []).map((c) => ({ label: c.label, severity: c.severity, evidence: c.hits.slice(0, 4).map((h) => h.evidence) })),
+    crypto: r.crypto && r.crypto.algorithms,
+    indicators: r.indicators && r.indicators.counts,
     interestingStrings: (r.strings.interesting || []).slice(0, 120),
     stringStats: { total: r.strings.total }
   };
@@ -89,7 +119,7 @@ async function runAgent({ filePath, provider, apiKey, model, mode, onEvent, sign
 
     let resp;
     try {
-      resp = await chat({ provider, apiKey, model, system, messages, tools, signal });
+      resp = await chatWithRetry({ provider, apiKey, model, system, messages, tools, signal }, emit);
     } catch (e) {
       emit({ type: 'error', text: String(e.message || e) });
       return { ok: false, error: String(e.message || e), report };
@@ -107,7 +137,7 @@ async function runAgent({ filePath, provider, apiKey, model, mode, onEvent, sign
     const assistantContent = [];
     if (resp.text) assistantContent.push({ type: 'text', text: resp.text });
     for (const tc of resp.toolCalls) {
-      assistantContent.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
+      assistantContent.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input, thoughtSignature: tc.thoughtSignature });
     }
     messages.push({ role: 'assistant', content: assistantContent });
 

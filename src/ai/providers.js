@@ -41,7 +41,7 @@ async function chatAnthropic({ apiKey, model, system, messages, tools, maxTokens
     body: JSON.stringify(body)
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(apiErr('Anthropic', res.status, data));
+  if (!res.ok) throw apiError('Anthropic', res.status, data);
 
   const text = (data.content || [])
     .filter((b) => b.type === 'text')
@@ -92,7 +92,7 @@ async function chatOpenAI({ apiKey, model, system, messages, tools, maxTokens = 
     body: JSON.stringify(body)
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(apiErr('OpenAI', res.status, data));
+  if (!res.ok) throw apiError('OpenAI', res.status, data);
 
   const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
   const text = (msg.content || '').trim();
@@ -135,7 +135,12 @@ async function chatGemini({ apiKey, model, system, messages, tools, signal }) {
       const parts = [];
       for (const c of m.content || []) {
         if (c.type === 'text' && c.text) parts.push({ text: c.text });
-        if (c.type === 'tool_use') parts.push({ functionCall: { name: c.name, args: c.input || {} } });
+        if (c.type === 'tool_use') {
+          // Gemini 3: functionCall geri gönderilirken thoughtSignature zorunlu.
+          const part = { functionCall: { name: c.name, args: c.input || {} } };
+          if (c.thoughtSignature) part.thoughtSignature = c.thoughtSignature;
+          parts.push(part);
+        }
       }
       contents.push({ role: 'model', parts });
     } else {
@@ -148,7 +153,7 @@ async function chatGemini({ apiKey, model, system, messages, tools, signal }) {
     contents,
     systemInstruction: system ? { parts: [{ text: system }] } : undefined,
     tools: tools && tools.length
-      ? [{ functionDeclarations: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.schema })) }]
+      ? [{ functionDeclarations: tools.map((t) => ({ name: t.name, description: t.description, parameters: toGeminiParams(t.schema) })) }]
       : undefined
   };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -159,7 +164,7 @@ async function chatGemini({ apiKey, model, system, messages, tools, signal }) {
     body: JSON.stringify(body)
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(apiErr('Gemini', res.status, data));
+  if (!res.ok) throw apiError('Gemini', res.status, data);
 
   const cand = (data.candidates && data.candidates[0]) || {};
   const parts = (cand.content && cand.content.parts) || [];
@@ -167,11 +172,38 @@ async function chatGemini({ apiKey, model, system, messages, tools, signal }) {
   let i = 0;
   const toolCalls = parts
     .filter((p) => p.functionCall)
-    .map((p) => ({ id: 'gem_' + i++, name: p.functionCall.name, input: p.functionCall.args || {} }));
+    .map((p) => ({
+      id: 'gem_' + i++,
+      name: p.functionCall.name,
+      input: p.functionCall.args || {},
+      thoughtSignature: p.thoughtSignature // Gemini 3: geri gönderimde gerekli
+    }));
   return { text, toolCalls, stopReason: cand.finishReason };
 }
 
 // ------------------------------------------------------------------ helpers
+// Gemini, JSON Schema'nın bir alt kümesini (OpenAPI benzeri) kabul eder ve
+// "additionalProperties", "$schema" gibi alanları REDDEDER. Şemayı ona göre temizle.
+function stripGeminiUnsupported(schema) {
+  if (Array.isArray(schema)) return schema.map(stripGeminiUnsupported);
+  if (schema && typeof schema === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(schema)) {
+      if (k === 'additionalProperties' || k === '$schema') continue;
+      out[k] = stripGeminiUnsupported(v);
+    }
+    return out;
+  }
+  return schema;
+}
+
+// Parametresiz araçlarda (boş properties) Gemini'ye parameters hiç gönderme.
+function toGeminiParams(schema) {
+  const s = stripGeminiUnsupported(schema);
+  if (s && s.type === 'object' && (!s.properties || Object.keys(s.properties).length === 0)) return undefined;
+  return s;
+}
+
 function safeJson(s) {
   try {
     return JSON.parse(s);
@@ -184,11 +216,19 @@ function apiErr(name, status, data) {
   return `${name} API hatası (${status}): ${msg}`;
 }
 
+// Geçici (yeniden denenebilir) sunucu hatalarını işaretli bir Error ile fırlat.
+function apiError(name, status, data) {
+  const e = new Error(apiErr(name, status, data));
+  e.status = status;
+  e.retryable = status === 429 || status === 500 || status === 502 || status === 503 || status === 529;
+  return e;
+}
+
 // Önerilen varsayılan model ID'leri (kullanıcı arayüzde değiştirebilir).
 const DEFAULT_MODELS = {
   anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-3-5-haiku-latest'],
   openai: ['gpt-4o', 'gpt-4o-mini', 'o4-mini'],
-  gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
+  gemini: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview']
 };
 
 module.exports = { chat, DEFAULT_MODELS };

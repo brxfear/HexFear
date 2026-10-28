@@ -80,7 +80,72 @@ function parseELF(buf) {
   // Dinamik bağımlılıklar (DT_NEEDED) ve SONAME
   result.neededLibraries = parseDynamic(buf, sections, is64);
 
+  // Dinamik semboller (içe/dışa aktarılan fonksiyonlar)
+  result.dynamicSymbols = parseDynSym(buf, sections, is64);
+
+  // Program header'lar: interpreter, GNU_STACK, GNU_RELRO
+  const ph = parseProgramHeaders(buf, is64);
+  if (ph.interp != null) result.interpreter = readCString(buf, ph.interp);
+
+  // Güvenlik korumaları
+  const hasCanary = result.dynamicSymbols.some((s) => s === '__stack_chk_fail' || s === '__stack_chk_guard');
+  const relroSection = sections.find((s) => s.name === '.data.rel.ro');
+  result.protections = {
+    nx: ph.gnuStack ? !ph.gnuStackExec : true, // GNU_STACK yoksa genelde NX
+    pie: eType === 3 && ph.hasInterp, // ET_DYN + interp = PIE
+    relro: ph.gnuRelro ? (ph.bindNow ? 'full' : 'partial') : 'yok',
+    canary: hasCanary,
+    stripped: !sections.some((s) => s.name === '.symtab')
+  };
+
   return result;
+}
+
+const PT_INTERP = 3;
+const PT_GNU_STACK = 0x6474e551;
+const PT_GNU_RELRO = 0x6474e552;
+
+function parseProgramHeaders(buf, is64) {
+  const out = { interp: null, hasInterp: false, gnuStack: false, gnuStackExec: false, gnuRelro: false, bindNow: false };
+  const phoff = is64 ? Number(buf.readBigUInt64LE(32)) : buf.readUInt32LE(28);
+  const phentsize = is64 ? buf.readUInt16LE(54) : buf.readUInt16LE(42);
+  const phnum = is64 ? buf.readUInt16LE(56) : buf.readUInt16LE(44);
+  if (!phoff || !phentsize) return out;
+  for (let i = 0; i < Math.min(phnum, 128); i++) {
+    const e = phoff + i * phentsize;
+    if (!safe(buf, e, phentsize)) break;
+    const type = buf.readUInt32LE(e);
+    const flags = is64 ? buf.readUInt32LE(e + 4) : buf.readUInt32LE(e + 24);
+    const offset = is64 ? Number(buf.readBigUInt64LE(e + 8)) : buf.readUInt32LE(e + 4);
+    if (type === PT_INTERP) { out.interp = offset; out.hasInterp = true; }
+    else if (type === PT_GNU_STACK) { out.gnuStack = true; out.gnuStackExec = !!(flags & 0x1); }
+    else if (type === PT_GNU_RELRO) { out.gnuRelro = true; }
+  }
+  return out;
+}
+
+const SHT_DYNSYM = 11;
+
+function parseDynSym(buf, sections, is64) {
+  const dynsym = sections.find((s) => s.type === SHT_DYNSYM) || sections.find((s) => s.name === '.dynsym');
+  if (!dynsym) return [];
+  const dynstr = sections.find((s) => s.name === '.dynstr' && s.type === SHT_STRTAB)
+    || sections.find((s) => s.type === SHT_STRTAB);
+  if (!dynstr) return [];
+  const step = is64 ? 24 : 16;
+  const out = [];
+  const seen = new Set();
+  const count = Math.min(Math.floor(dynsym.size / step), 8000);
+  for (let i = 0; i < count; i++) {
+    const e = dynsym.offset + i * step;
+    if (!safe(buf, e, step)) break;
+    const nameIdx = buf.readUInt32LE(e);
+    if (nameIdx === 0) continue;
+    const name = readCString(buf, dynstr.offset + nameIdx, 200);
+    if (name && !seen.has(name)) { seen.add(name); out.push(name); }
+    if (out.length >= 2000) break;
+  }
+  return out;
 }
 
 function parseDynamic(buf, sections, is64) {

@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 // Minimal, savunmacı PE (Windows) ayrıştırıcı. Harici bağımlılık yok.
 // Amaç: başlık, section ve import tablosu gibi gerçek verileri AI'ya sunmak.
 // Tüm okumalar sınır kontrollü; bozuk/kötü niyetli dosyada güvenli biçimde durur.
@@ -88,10 +90,23 @@ function parsePE(buf) {
     result.imageBase = isPlus
       ? '0x' + buf.readBigUInt64LE(opt + 24).toString(16)
       : '0x' + buf.readUInt32LE(opt + 28).toString(16);
-    const subOff = isPlus ? opt + 68 : opt + 68;
+    const subOff = opt + 68;
     if (safe(buf, subOff, 2)) {
       const sub = buf.readUInt16LE(subOff);
       result.subsystem = SUBSYSTEM[sub] || `0x${sub.toString(16)}`;
+    }
+    // DllCharacteristics -> güvenlik korumaları
+    if (safe(buf, opt + 70, 2)) {
+      const dc = buf.readUInt16LE(opt + 70);
+      result.protections = {
+        aslr: !!(dc & 0x0040), // DYNAMIC_BASE
+        highEntropyVA: !!(dc & 0x0020),
+        dep: !!(dc & 0x0100), // NX_COMPAT
+        seh: !(dc & 0x0400), // NO_SEH ters
+        cfg: !!(dc & 0x4000), // GUARD_CF (Control Flow Guard)
+        forceIntegrity: !!(dc & 0x0080),
+        appContainer: !!(dc & 0x1000)
+      };
     }
   }
 
@@ -149,8 +164,114 @@ function parsePE(buf) {
 
   // Imports
   result.imports = parseImports(buf, sections, dirs[1], isPlus);
+  result.imphash = computeImphash(result.imports);
+
+  // Exports (DLL'lerde ve bazı exe'lerde)
+  result.exports = parseExports(buf, sections, dirs[0]);
+
+  // Debug dizini -> PDB yolu
+  result.debug = parseDebug(buf, sections, dirs[6]);
+
+  // Resources özeti (ikon, sürüm bilgisi, manifest)
+  result.resources = parseResourcesSummary(buf, sections, dirs[2]);
 
   return result;
+}
+
+// imphash: içe aktarılan "dll.fonksiyon" listesinin MD5'i (örnek eşleştirmede standart)
+function computeImphash(imports) {
+  if (!imports || !imports.length) return null;
+  const parts = [];
+  for (const imp of imports) {
+    const dll = imp.dll.toLowerCase().replace(/\.(dll|ocx|sys)$/i, '');
+    for (const fn of imp.functions || []) {
+      if (fn.startsWith('#ordinal')) parts.push(dll + '.' + fn.replace('#ordinal:', 'ord'));
+      else parts.push(dll + '.' + fn.toLowerCase());
+    }
+  }
+  if (!parts.length) return null;
+  return crypto.createHash('md5').update(parts.join(',')).digest('hex');
+}
+
+function parseExports(buf, sections, dir) {
+  if (!dir || !dir.rva) return null;
+  const off = rvaToOffset(sections, dir.rva);
+  if (off == null || !safe(buf, off, 40)) return null;
+  try {
+    const nameRVA = buf.readUInt32LE(off + 12);
+    const numFns = buf.readUInt32LE(off + 20);
+    const numNames = buf.readUInt32LE(off + 24);
+    const namesRVA = buf.readUInt32LE(off + 32);
+    const dllName = readCString(buf, rvaToOffset(sections, nameRVA));
+    const names = [];
+    const npOff = rvaToOffset(sections, namesRVA);
+    for (let i = 0; i < Math.min(numNames, 2000) && npOff != null; i++) {
+      if (!safe(buf, npOff + i * 4, 4)) break;
+      const nRVA = buf.readUInt32LE(npOff + i * 4);
+      const n = readCString(buf, rvaToOffset(sections, nRVA));
+      if (n) names.push(n);
+      if (names.length >= 1000) break;
+    }
+    return { dllName, totalFunctions: numFns, namedExports: numNames, names };
+  } catch {
+    return null;
+  }
+}
+
+const DEBUG_TYPES = { 2: 'CodeView (PDB)', 4: 'Misc', 9: 'VC Feature', 12: 'POGO', 13: 'Reproducible', 16: 'Ex-DLL' };
+
+function parseDebug(buf, sections, dir) {
+  if (!dir || !dir.rva) return null;
+  const off = rvaToOffset(sections, dir.rva);
+  if (off == null) return null;
+  const entries = [];
+  let pdbPath = null;
+  const count = Math.min(Math.floor(dir.size / 28), 32);
+  for (let i = 0; i < count; i++) {
+    const e = off + i * 28;
+    if (!safe(buf, e, 28)) break;
+    const type = buf.readUInt32LE(e + 12);
+    const dataOff = buf.readUInt32LE(e + 24); // PointerToRawData (dosya offseti)
+    entries.push(DEBUG_TYPES[type] || ('type' + type));
+    if (type === 2 && safe(buf, dataOff, 24)) {
+      // CodeView RSDS: 'RSDS' + GUID(16) + age(4) + path(asciiz)
+      if (buf.toString('latin1', dataOff, dataOff + 4) === 'RSDS') {
+        pdbPath = readCString(buf, dataOff + 24, 260);
+      }
+    }
+  }
+  if (!entries.length) return null;
+  return { types: [...new Set(entries)], pdbPath };
+}
+
+const RES_TYPES = { 1: 'CURSOR', 2: 'BITMAP', 3: 'ICON', 4: 'MENU', 5: 'DIALOG', 6: 'STRING', 9: 'ACCELERATOR', 10: 'RCDATA', 14: 'GROUP_ICON', 16: 'VERSION', 24: 'MANIFEST' };
+
+function parseResourcesSummary(buf, sections, dir) {
+  if (!dir || !dir.rva) return null;
+  const base = rvaToOffset(sections, dir.rva);
+  if (base == null || !safe(buf, base, 16)) return null;
+  try {
+    const numNamed = buf.readUInt16LE(base + 12);
+    const numId = buf.readUInt16LE(base + 14);
+    const types = [];
+    for (let i = 0; i < Math.min(numNamed + numId, 64); i++) {
+      const e = base + 16 + i * 8;
+      if (!safe(buf, e, 8)) break;
+      const nameOrId = buf.readUInt32LE(e);
+      if (!(nameOrId & 0x80000000)) {
+        types.push(RES_TYPES[nameOrId] || ('ID_' + nameOrId));
+      }
+    }
+    return {
+      typeCount: numNamed + numId,
+      types: [...new Set(types)],
+      hasVersion: types.includes('VERSION'),
+      hasManifest: types.includes('MANIFEST'),
+      hasIcon: types.includes('ICON') || types.includes('GROUP_ICON')
+    };
+  } catch {
+    return null;
+  }
 }
 
 function parseImports(buf, sections, importDir, isPlus) {

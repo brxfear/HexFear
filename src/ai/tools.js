@@ -173,7 +173,33 @@ const TOOLS = [
     schema: { type: 'object', properties: {}, additionalProperties: false },
     run: (ctx) => {
       const s = ctx.report.structure || {};
-      return { imports: s.imports || [], neededLibraries: s.neededLibraries || [] };
+      return { imports: s.imports || [], neededLibraries: s.neededLibraries || [], dynamicSymbols: s.dynamicSymbols || [] };
+    }
+  },
+  {
+    name: 'get_exports',
+    description: 'PE/DLL export tablosunu (dışa aktarılan fonksiyon adları) döndürür.',
+    schema: { type: 'object', properties: {}, additionalProperties: false },
+    run: (ctx) => ({ exports: (ctx.report.structure && ctx.report.structure.exports) || null })
+  },
+  {
+    name: 'get_capabilities',
+    description: 'Tespit edilen yetenek/davranış kategorilerini (ağ, kripto, enjeksiyon, anti-debug, kalıcılık vb.) kanıtlarıyla döndürür.',
+    schema: { type: 'object', properties: {}, additionalProperties: false },
+    run: (ctx) => ({ capabilities: ctx.report.capabilities || [], crypto: ctx.report.crypto || null })
+  },
+  {
+    name: 'get_indicators',
+    description: 'Çıkarılan göstergeleri (URL, IP, e-posta, alan adı, dosya yolu, registry, ortam değişkeni) döndürür.',
+    schema: {
+      type: 'object',
+      properties: { kind: { type: 'string', description: 'Opsiyonel: urls/ips/emails/domains/winPaths/unixPaths/registry/envVars' } },
+      additionalProperties: false
+    },
+    run: (ctx, a = {}) => {
+      const ind = ctx.report.indicators || {};
+      if (a.kind && ind[a.kind]) return { kind: a.kind, values: ind[a.kind] };
+      return { counts: ind.counts, ...ind };
     }
   },
   {
@@ -222,10 +248,15 @@ function summarizeStructure(s) {
     subsystem: s.subsystem,
     entry: s.entryPoint || s.entryPointRVA,
     isDotNet: s.isDotNet,
+    protections: s.protections,
+    imphash: s.imphash,
+    pdbPath: s.debug && s.debug.pdbPath,
+    interpreter: s.interpreter,
     sectionCount: (s.sections || []).length,
     sections: (s.sections || []).map((x) => x.name)
   };
   if (s.imports) out.importedDlls = s.imports.map((i) => `${i.dll}(${i.functionCount})`);
+  if (s.exports) out.exports = { dll: s.exports.dllName, count: s.exports.namedExports };
   if (s.neededLibraries) out.neededLibraries = s.neededLibraries;
   return out;
 }
